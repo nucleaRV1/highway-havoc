@@ -12,9 +12,12 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bungee&display=swap" rel="stylesheet">
 <style>
+  /* Bungee by David Jonathan Ross, SIL Open Font License (fonts/OFL.txt). Bundled so the app makes no network calls. */
+  @font-face {
+    font-family: 'Bungee'; font-style: normal; font-weight: 400; font-display: swap;
+    src: url(fonts/bungee.woff2) format('woff2');
+  }
   :root {
     --bg: #14110f;
     --panel: rgba(18, 14, 10, 0.88);
@@ -155,6 +158,8 @@ function resize() {
 addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 200));
 resize();
+// Canvas text only uses a web font once it has loaded, so load it up front
+if (document.fonts && document.fonts.load) document.fonts.load('20px Bungee').catch(() => {});
 
 // Offline support when installed to the home screen (needs a real web host, not file://)
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
@@ -917,7 +922,12 @@ function sirenSound(dur) {
   g.gain.exponentialRampToValueAtTime(.0001, t + dur);
   o.connect(g).connect(master); o.start(t); o.stop(t + dur);
 }
+// Phone vibration in the iOS app (Capacitor Haptics plugin); a no-op in browsers
+function haptic(style) {
+  try { window.Capacitor?.Plugins?.Haptics?.impact({ style }); } catch (e) {}
+}
 function cashSound() {
+  haptic('LIGHT');
   beep(1318, .06, 'square', .035);
   setTimeout(() => beep(1760, .1, 'square', .035), 60);
 }
@@ -1016,9 +1026,11 @@ function hitPlayer(o) {
     state = 'crashing'; crashTimer = 1.6;
     burst(player.x, player.y, 'big');
     crashSound(true);
+    haptic('HEAVY');
   } else {
     invuln = 1.8; speedMul = .5;
     crashSound(false);
+    haptic('MEDIUM');
   }
 }
 

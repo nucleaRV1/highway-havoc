@@ -1,0 +1,9 @@
+node_modules/
+www/
+# App Store Connect API keys must never be committed
+*.p8
+# Xcode build output
+ios/App/build/
+ios/DerivedData/
+*.xcuserstate
+xcuserdata/

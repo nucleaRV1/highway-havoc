@@ -1,0 +1,18 @@
+{
+  "name": "highway-havoc",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Highway Havoc - a desert driving game for iPhone and the web",
+  "scripts": {
+    "build": "node scripts/build-web.js",
+    "sync": "npm run build && npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "7.6.9",
+    "@capacitor/haptics": "7.0.5",
+    "@capacitor/ios": "7.6.9"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.6.9"
+  }
+}
