@@ -112,7 +112,7 @@
     <button id="startBtn" class="btn">Start engine ▸</button>
     <div class="help" id="helpText">
       <b>← →</b> / <b>A D</b> steer · <b>↑ ↓</b> move · <b>P</b> pause · <b>M</b> mute<br>
-      Dodge wrecks, fireballs, trucks, cones, tumbleweeds &amp; helicopters!
+      Dodge wrecks, fireballs, trucks, deer, cones, tumbleweeds &amp; helicopters!
     </div>
     <div class="best">Best score: <span id="bestMenu">0</span></div>
   </div>
@@ -348,6 +348,7 @@ const OBS = {
   cone:       { w: 28, h: 34, hit: .7,  weight: () => 3 },
   tumbleweed: { w: 42, h: 42, hit: .65, weight: () => 2.5 },
   truck:      { w: 54, h: 136, hit: .85, weight: () => 2 },
+  deer:       { w: 52, h: 50, hit: .65, weight: t => t < 8 ? 0 : 1.3 },
   crashed:    { w: 46, h: 84, hit: .78, weight: t => 1.2 + t / 70 },
   fireball:   { w: 34, h: 34, hit: .6,  weight: t => t < 15 ? .4 : 1.2 + t / 80 },
 };
@@ -374,6 +375,37 @@ function spawnObstacle(lane) {
   } else if (kind === 'fireball') {
     o.vy = rand(120, 220) + elapsed * 1.5;
     o.vx = rand(-50, 50);
+  } else if (kind === 'deer') {
+    // Walks in from the desert on one side and bounds across the road
+    o.dir = Math.random() < .5 ? 1 : -1;
+    o.buck = Math.random() < .4;
+    o.rot = 0;
+    if (Math.random() < .45) {
+      // Lurker: stands on the shoulder facing the road and now and then inches into the edge lane
+      o.lurk = true;
+      o.baseX = o.dir > 0 ? ROAD_L - 22 : ROAD_R + 22;
+      o.x = o.baseX; o.y = rand(-50, 40); o.vx = 0;
+      o.lurkPhase = 'wait'; o.phaseT = rand(.3, 1.2); o.graze = Math.random() < .5;
+      obstacles.push(o);
+      return;
+    }
+    o.x = o.dir > 0 ? -40 : W + 40;
+    o.y = rand(-20, 110);
+    o.speedX = o.dir * rand(150, 230);
+    if (Math.random() < .3) { o.freezeX = rand(ROAD_L + 50, ROAD_R - 50); o.freezeT = rand(.7, 1.3); }
+    if (Math.random() < .3) {
+      // A small herd follows the leader, sometimes with a fawn
+      const n = Math.random() < .5 ? 1 : 2;
+      for (let i = 1; i <= n; i++) {
+        const fawn = i === n && Math.random() < .5;
+        obstacles.push({
+          ...o, buck: false, fawn, scale: fawn ? .72 : 1,
+          w: o.w * (fawn ? .72 : 1), h: o.h * (fawn ? .72 : 1),
+          x: o.x - o.dir * i * rand(55, 75), y: o.y + rand(-25, 25), t: Math.random() * 10,
+          freezeX: o.freezeX === undefined ? undefined : o.freezeX - o.dir * i * 60,
+        });
+      }
+    }
   } else if (kind === 'truck') {
     o.slow = rand(.3, .45); // fraction of road speed the truck drives at
     o.color = pick(['#c62828', '#1565c0', '#2e7d32', '#f9a825', '#455a64', '#6a1b9a']);
@@ -448,6 +480,57 @@ function drawTumbleweed(o) {
     ctx.strokeStyle = s.light ? '#c9a062' : '#7c5a2c';
     ctx.beginPath(); ctx.arc(s.cx, s.cy, s.r, s.a, s.a + s.s); ctx.stroke();
   }
+  ctx.restore();
+}
+
+// Deer seen from the side, facing its direction of travel, with a bounding gait
+function drawDeer(o) {
+  const s = o.scale || 1;
+  const moving = Math.abs(o.vx) > 1;
+  const ph = o.t * 11;
+  const hop = moving ? Math.abs(Math.sin(ph)) * 6 : 0;
+  ctx.fillStyle = 'rgba(0,0,0,.22)'; ellipse(ctx, o.x + 3, o.y + 20 * s, 22 * s, 6 * s); ctx.fill();
+  ctx.save();
+  ctx.translate(o.x, o.y - hop);
+  // Lurkers always face the road, even while backing off
+  const face = o.lurk ? o.dir : (o.vx < 0 || (!o.vx && o.dir < 0) ? -1 : 1);
+  ctx.scale(face * s, s);
+  // Legs: front and back pairs swing opposite each other
+  const sw = moving ? Math.sin(ph) * .55 : 0;
+  ctx.strokeStyle = '#5e3b1c'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (const [lx, a] of [[-13, sw], [-8, -sw * .6], [9, -sw], [13, sw * .6]]) {
+    ctx.moveTo(lx, 4); ctx.lineTo(lx + Math.sin(a) * 16, 4 + Math.cos(a) * 16);
+  }
+  ctx.stroke();
+  // Body, belly and white tail
+  const g = ctx.createLinearGradient(0, -10, 0, 10);
+  g.addColorStop(0, '#a86d3a'); g.addColorStop(1, '#7a4a22');
+  ctx.fillStyle = g; ellipse(ctx, 0, 0, 19, 10); ctx.fill();
+  ctx.fillStyle = '#dcbb92'; ellipse(ctx, 1, 5, 13, 3.5); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ellipse(ctx, -19, -4, 3.5, 2.5); ctx.fill();
+  if (o.fawn) {
+    ctx.fillStyle = 'rgba(255,255,255,.75)';
+    for (const [sx, sy] of [[-8, -4], [-2, -6], [4, -3], [-5, 1], [8, -6]]) { circle(ctx, sx, sy, 1.6); ctx.fill(); }
+  }
+  // Neck and head (tipped down to the ground while grazing)
+  ctx.save();
+  if (o.graze && !moving) { ctx.translate(10, -4); ctx.rotate(1); ctx.translate(-10, 4); }
+  ctx.fillStyle = '#93602f';
+  ctx.beginPath(); ctx.moveTo(9, -5); ctx.lineTo(16, -19); ctx.lineTo(22, -16); ctx.lineTo(17, 1); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#9a6233'; ellipse(ctx, 22, -19, 7, 4.5); ctx.fill();
+  ctx.fillStyle = '#3a2412'; circle(ctx, 28.5, -18.5, 1.8); ctx.fill();
+  ctx.fillStyle = '#7a4a22'; ellipse(ctx, 17, -24, 2.5, 5); ctx.fill();
+  ctx.fillStyle = '#111'; circle(ctx, 23, -20.5, 1.3); ctx.fill();
+  if (o.buck) {
+    ctx.strokeStyle = '#eadbb8'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(20, -23); ctx.lineTo(16, -36); ctx.moveTo(18, -29); ctx.lineTo(12, -31);
+    ctx.moveTo(17, -33); ctx.lineTo(20, -39);
+    ctx.moveTo(22, -23); ctx.lineTo(25, -35); ctx.moveTo(24, -30); ctx.lineTo(29, -32);
+    ctx.stroke();
+  }
+  ctx.restore();
   ctx.restore();
 }
 
@@ -731,7 +814,7 @@ function drawChase(o) {
   ctx.restore();
 }
 
-const DRAW_OBS = { getaway: drawChase, police: drawChase, heli: drawHeli, cone: drawCone, tumbleweed: drawTumbleweed, truck: drawTruck, crashed: drawCrashed, fireball: drawFireball };
+const DRAW_OBS = { getaway: drawChase, police: drawChase, heli: drawHeli, cone: drawCone, tumbleweed: drawTumbleweed, truck: drawTruck, deer: drawDeer, splat: drawSplat, crashed: drawCrashed, fireball: drawFireball };
 
 // ---------- Particles ----------
 function addP(p) {
@@ -1017,9 +1100,82 @@ function togglePause() {
   engineUpdate();
 }
 
+// Roadside deer: wait (maybe grazing) -> inch out into the edge lane -> hold -> back off
+function updateLurker(o, dt) {
+  o.phaseT -= dt;
+  if (o.lurkPhase === 'out') {
+    o.vx = o.dir * 45;
+    const edge = o.baseX + o.dir * o.reach;
+    if ((o.x - edge) * o.dir >= 0) { o.x = edge; o.vx = 0; o.lurkPhase = 'hold'; o.phaseT = rand(.4, 1); }
+  } else if (o.lurkPhase === 'back') {
+    o.vx = -o.dir * 60;
+    if ((o.x - o.baseX) * o.dir <= 0) {
+      o.x = o.baseX; o.vx = 0; o.lurkPhase = 'wait'; o.phaseT = rand(.6, 1.6); o.graze = Math.random() < .6;
+    }
+  } else {
+    o.vx = 0;
+    if (o.phaseT > 0) return;
+    if (o.lurkPhase === 'hold') o.lurkPhase = 'back';
+    else if (Math.random() < .6) { o.lurkPhase = 'out'; o.reach = rand(30, 58); o.graze = false; }
+    else o.phaseT = rand(.5, 1.2);
+  }
+}
+
+// A bumped deer becomes a cartoon red splat on the road
+function splatDeer(o) {
+  o.kind = 'splat';
+  o.inert = true;
+  o.vx = 0; o.vy = 0;
+  o.jStart = o.t;
+  // Lumpy outline plus a ring of droplets, fixed per splat
+  o.blob = Array.from({ length: 14 }, (_, i) => rand(.7, 1.15) * (i % 2 ? .8 : 1));
+  o.drops = Array.from({ length: 9 }, () => {
+    const a = rand(0, 6.28), d = rand(30, 48);
+    return { x: Math.cos(a) * d, y: Math.sin(a) * d * .6, r: rand(2, 5) };
+  });
+  for (let i = 0; i < 24; i++) {
+    const a = rand(0, 6.28), s = rand(80, 280), l = rand(.3, .6);
+    addP({ type: 'spark', x: o.x, y: o.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: l, max: l, size: rand(3, 6), color: pick(['#b3121f', '#d32030', '#7d0a14']) });
+  }
+  addP({ type: 'text', text: 'SPLAT!', x: o.x, y: o.y - 34, vy: -60, life: .9, max: .9, color: '#ff4a4a' });
+  if (actx) { beep(180, .18, 'sawtooth', .06, -120); beep(90, .25, 'sine', .1, -40); }
+}
+
+function drawSplat(o) {
+  const age = o.t - o.jStart, s = (o.scale || 1) * Math.min(1, .3 + age * 8);
+  ctx.save();
+  ctx.translate(o.x, o.y + 8);
+  ctx.scale(s, s * .65);
+  const g = ctx.createRadialGradient(-6, -6, 2, 0, 0, 34);
+  g.addColorStop(0, '#d9283a'); g.addColorStop(.7, '#a3121f'); g.addColorStop(1, '#6d0a14');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  const n = o.blob.length;
+  for (let i = 0; i <= n; i++) {
+    const a = i / n * Math.PI * 2, r = 28 * o.blob[i % n];
+    const x = Math.cos(a) * r, y = Math.sin(a) * r;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath(); ctx.fill();
+  for (const d of o.drops) { circle(ctx, d.x, d.y, d.r); ctx.fill(); }
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ellipse(ctx, -9, -9, 7, 4); ctx.fill();
+  ctx.restore();
+  if (o.buck) {
+    // The antlers survive, sitting on top of the splat
+    ctx.save();
+    ctx.translate(o.x, o.y + 2); ctx.scale(s, s);
+    ctx.strokeStyle = '#eadbb8'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-3, 0); ctx.lineTo(-10, -12); ctx.moveTo(-7, -7); ctx.lineTo(-14, -8); ctx.moveTo(-9, -10); ctx.lineTo(-7, -16);
+    ctx.moveTo(3, 0); ctx.lineTo(10, -12); ctx.moveTo(7, -7); ctx.lineTo(14, -8); ctx.moveTo(9, -10); ctx.lineTo(7, -16);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function hitPlayer(o) {
-  o.dead = true;
-  burst(o.x, o.y, o.kind);
+  if (o.kind === 'deer') splatDeer(o);
+  else { o.dead = true; burst(o.x, o.y, o.kind); }
   lives--;
   shake = .45;
   if (lives <= 0) {
@@ -1053,6 +1209,15 @@ function updateObstacles(dt) {
   for (const o of obstacles) {
     o.t += dt;
     if (o.kind === 'truck') o.vy = -speed * o.slow;
+    if (o.kind === 'deer') {
+      if (o.lurk) updateLurker(o, dt);
+      else {
+        // Deer in headlights: stop for a moment at freezeX, then keep going
+        const atFreeze = o.freezeT > 0 && (o.dir > 0 ? o.x >= o.freezeX : o.x <= o.freezeX);
+        if (atFreeze) o.freezeT -= dt;
+        o.vx = atFreeze ? 0 : o.speedX;
+      }
+    }
     if (o.chase) {
       // Getaway car and police overtake from behind
       o.vy = -(speed + o.boost);
@@ -1111,15 +1276,16 @@ function updateObstacles(dt) {
   for (const c of obstacles) {
     if (!c.chase || c.dead) continue;
     for (const o of obstacles) {
-      if (o.chase || o.dead || o.phase === 'air') continue;
+      if (o.chase || o.dead || o.inert || o.phase === 'air') continue;
       if (Math.abs(c.x - o.x) < (c.w + o.w * o.hit) * .45 && Math.abs(c.y - o.y) < (c.h + o.h * o.hit) * .45) {
-        o.dead = true;
-        burst(o.x, o.y, o.kind);
+        if (o.kind === 'deer') splatDeer(o);
+        else { o.dead = true; burst(o.x, o.y, o.kind); }
         beep(160, .15, 'sawtooth', .05, -60);
       }
     }
   }
-  obstacles = obstacles.filter(o => !o.dead && (o.chase ? o.y > -250 : o.y < H + 120));
+  obstacles = obstacles.filter(o => !o.dead && (o.chase ? o.y > -250 : o.y < H + 120) &&
+    !(o.kind === 'deer' && (o.x < -100 || o.x > W + 100) && Math.sign(o.vx) === Math.sign(o.x - W / 2)));
   if (chaseLane >= 0 && chaseWarn <= 0 && !obstacles.some(o => o.chase)) chaseLane = -1;
 }
 
@@ -1127,7 +1293,7 @@ function checkCollisions() {
   if (invuln > 0) return;
   const pw = car.w * .42, ph = car.h * .44;
   for (const o of obstacles) {
-    if (o.phase === 'air') continue;
+    if (o.phase === 'air' || o.inert) continue;
     const ow = o.w * o.hit / 2, oh = o.h * o.hit / 2;
     if (Math.abs(player.x - o.x) < pw + ow && Math.abs(player.y - o.y) < ph + oh) {
       hitPlayer(o);
