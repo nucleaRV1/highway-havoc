@@ -1,6 +1,6 @@
 // Offline support: cache the game shell, refresh it in the background when online.
 // Bump CACHE when shipping a new version so phones pick it up.
-const CACHE = 'highway-havoc-v3';
+const CACHE = 'highway-havoc-v4';
 const SHELL = ['./', './index.html', './manifest.json', './fonts/bungee.woff2', './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {

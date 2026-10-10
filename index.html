@@ -1121,7 +1121,7 @@ function updateLurker(o, dt) {
   }
 }
 
-// A bumped deer becomes a cartoon red splat on the road
+// A bumped deer leaves a little raspberry-colored splatter on the road
 function splatDeer(o) {
   o.kind = 'splat';
   o.inert = true;
@@ -1130,14 +1130,13 @@ function splatDeer(o) {
   // Lumpy outline plus a ring of droplets, fixed per splat
   o.blob = Array.from({ length: 14 }, (_, i) => rand(.7, 1.15) * (i % 2 ? .8 : 1));
   o.drops = Array.from({ length: 9 }, () => {
-    const a = rand(0, 6.28), d = rand(30, 48);
-    return { x: Math.cos(a) * d, y: Math.sin(a) * d * .6, r: rand(2, 5) };
+    const a = rand(0, 6.28), d = rand(20, 32);
+    return { x: Math.cos(a) * d, y: Math.sin(a) * d * .6, r: rand(1.5, 3.5) };
   });
   for (let i = 0; i < 24; i++) {
     const a = rand(0, 6.28), s = rand(80, 280), l = rand(.3, .6);
-    addP({ type: 'spark', x: o.x, y: o.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: l, max: l, size: rand(3, 6), color: pick(['#b3121f', '#d32030', '#7d0a14']) });
+    addP({ type: 'spark', x: o.x, y: o.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: l, max: l, size: rand(2, 5), color: pick(['#e30b5c', '#c2185b', '#8b0a3e']) });
   }
-  addP({ type: 'text', text: 'SPLAT!', x: o.x, y: o.y - 34, vy: -60, life: .9, max: .9, color: '#ff4a4a' });
   if (actx) { beep(180, .18, 'sawtooth', .06, -120); beep(90, .25, 'sine', .1, -40); }
 }
 
@@ -1146,31 +1145,20 @@ function drawSplat(o) {
   ctx.save();
   ctx.translate(o.x, o.y + 8);
   ctx.scale(s, s * .65);
-  const g = ctx.createRadialGradient(-6, -6, 2, 0, 0, 34);
-  g.addColorStop(0, '#d9283a'); g.addColorStop(.7, '#a3121f'); g.addColorStop(1, '#6d0a14');
+  const g = ctx.createRadialGradient(-4, -4, 1, 0, 0, 20);
+  g.addColorStop(0, '#ff2e7a'); g.addColorStop(.7, '#e30b5c'); g.addColorStop(1, '#8b0a3e');
   ctx.fillStyle = g;
   ctx.beginPath();
   const n = o.blob.length;
   for (let i = 0; i <= n; i++) {
-    const a = i / n * Math.PI * 2, r = 28 * o.blob[i % n];
+    const a = i / n * Math.PI * 2, r = 17 * o.blob[i % n];
     const x = Math.cos(a) * r, y = Math.sin(a) * r;
     i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
   }
   ctx.closePath(); ctx.fill();
   for (const d of o.drops) { circle(ctx, d.x, d.y, d.r); ctx.fill(); }
-  ctx.fillStyle = 'rgba(255,255,255,.35)'; ellipse(ctx, -9, -9, 7, 4); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ellipse(ctx, -5, -5, 4, 2.5); ctx.fill();
   ctx.restore();
-  if (o.buck) {
-    // The antlers survive, sitting on top of the splat
-    ctx.save();
-    ctx.translate(o.x, o.y + 2); ctx.scale(s, s);
-    ctx.strokeStyle = '#eadbb8'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-3, 0); ctx.lineTo(-10, -12); ctx.moveTo(-7, -7); ctx.lineTo(-14, -8); ctx.moveTo(-9, -10); ctx.lineTo(-7, -16);
-    ctx.moveTo(3, 0); ctx.lineTo(10, -12); ctx.moveTo(7, -7); ctx.lineTo(14, -8); ctx.moveTo(9, -10); ctx.lineTo(7, -16);
-    ctx.stroke();
-    ctx.restore();
-  }
 }
 
 function hitPlayer(o) {
